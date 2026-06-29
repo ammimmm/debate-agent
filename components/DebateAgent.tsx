@@ -50,6 +50,7 @@ export default function DebateAgent() {
   const [isRecording, setIsRecording] = useState(false)
   const [finalData, setFinalData] = useState<{ scores: { p: number; s: number; l: number }; summary: string } | null>(null)
   const [scoreAccum, setScoreAccum] = useState<{ p: number[]; s: number[]; l: number[] }>({ p: [], s: [], l: [] })
+  const [ttsEnabled, setTtsEnabled] = useState(true)
   const chatRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recogRef = useRef<any>(null)
@@ -70,13 +71,13 @@ export default function DebateAgent() {
     setLoading(true)
     setStatus('AI가 반대 입장을 준비 중...')
 
-    const system = `당신은 토론 AI입니다. 주제: "${t}"에 대해 항상 반대 입장을 취합니다. 첫 발언에서 반대 입장의 핵심 논거 2가지를 간결하게 제시하세요 (3-4문장). 한국어로 답하세요.`
+    const system = `당신은 토론 AI입니다. 주제: "${t}"에 대해 항상 반대 입장을 취합니다. 반대 입장의 핵심 논거를 2~3문장으로만 간결하게 말하세요. 절대 3문장을 넘지 마세요. 한국어로 답하세요.`
     const initMsg: Message[] = [{ role: 'user', content: '토론을 시작합니다. 반대 입장의 핵심 주장을 먼저 말씀해주세요.' }]
     try {
       const reply = await callAPI(system, initMsg)
       addTurn({ role: 'ai', text: reply })
       setHistory([{ role: 'assistant', content: reply }])
-      speak(reply)
+      if (ttsEnabled) speak(reply)
     } catch {
       addTurn({ role: 'ai', text: '오류가 발생했습니다. 페이지를 새로고침해주세요.' })
     }
@@ -98,7 +99,7 @@ export default function DebateAgent() {
     const system = `당신은 토론 AI이자 토론 코치입니다. 주제: "${topic || customTopic}"에서 반대 입장입니다.
 사용자의 발언에 대해 다음 형식으로 정확히 JSON을 반환하세요 (마크다운 없이 순수 JSON만):
 {
-  "rebuttal": "반론 내용 (3-4문장, 날카롭고 논리적으로)",
+  "rebuttal": "반론 내용 (2~3문장, 날카롭고 논리적으로, 절대 3문장 초과 금지)",
   "feedback": {
     "pronunciation": { "score": 1에서10사이정수, "comment": "발음/명확성 피드백 1문장" },
     "structure": { "score": 1에서10사이정수, "comment": "문장 구성/논리 구조 피드백 1문장" },
@@ -129,7 +130,7 @@ export default function DebateAgent() {
       }
       addTurn({ role: 'ai', text: parsed.rebuttal, feedback: parsed.feedback, tip: parsed.tip })
       setHistory(prev => [...prev, { role: 'assistant', content: parsed.rebuttal }])
-      speak(parsed.rebuttal)
+      if (ttsEnabled) speak(parsed.rebuttal)
     } catch {
       addTurn({ role: 'ai', text: '응답 오류가 발생했습니다. 다시 시도해주세요.' })
     }
@@ -247,6 +248,13 @@ export default function DebateAgent() {
               <div className="flex gap-2 mt-3">
                 <span className="flex-1 text-center py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-medium">나 — 찬성 입장</span>
                 <span className="flex-1 text-center py-1.5 rounded-lg bg-red-50 text-red-600 text-xs font-medium">AI — 반대 입장</span>
+                <button
+                  onClick={() => { if (!ttsEnabled) { window.speechSynthesis?.cancel() }; setTtsEnabled(v => !v) }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${ttsEnabled ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-400 border-gray-200'}`}
+                  title="AI 음성 on/off"
+                >
+                  {ttsEnabled ? '🔊 음성 ON' : '🔇 음성 OFF'}
+                </button>
               </div>
             </div>
 
