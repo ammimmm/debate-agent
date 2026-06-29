@@ -11,17 +11,36 @@ type Turn = {
   text: string
   feedback?: Feedback
   tip?: string
-  audioBlob?: string  // base64 audio URL for playback
+  audioBlob?: string
 }
 
-const PRESET_TOPICS = [
+const ALL_TOPICS = [
   'AI가 인간의 일자리를 대체하는 것은 사회적으로 이롭다',
   '사형제도는 폐지되어야 한다',
   '원격근무는 사무실 근무보다 생산성이 높다',
   '소셜미디어는 민주주의에 해롭다',
   '대학 교육은 더 이상 필수적이지 않다',
   '동물실험은 전면 금지되어야 한다',
+  '기본소득제는 도입되어야 한다',
+  '핵에너지는 친환경 에너지로 인정받아야 한다',
+  '가상화폐는 미래의 화폐가 될 것이다',
+  '인터넷 실명제는 도입되어야 한다',
+  '안락사는 합법화되어야 한다',
+  '병역 의무는 모든 성별에게 동등하게 적용되어야 한다',
+  '스포츠에서 AI 심판을 전면 도입해야 한다',
+  '탄소세는 강화되어야 한다',
+  '소셜미디어 사용 연령을 18세 이상으로 제한해야 한다',
+  '주 4일 근무제는 도입되어야 한다',
+  '게임은 스포츠로 인정받아야 한다',
+  '반려동물 공장식 번식은 전면 금지되어야 한다',
+  '자율주행차는 인간 운전자보다 안전하다',
+  '우주 개발에 국가 예산을 더 투자해야 한다',
 ]
+
+function getRandomTopics() {
+  const shuffled = [...ALL_TOPICS].sort(() => Math.random() - 0.5)
+  return shuffled.slice(0, 10)
+}
 
 async function callAPI(system: string, messages: Message[]): Promise<string> {
   const res = await fetch('/api/debate', {
@@ -57,6 +76,8 @@ export default function DebateAgent() {
   const [phase, setPhase] = useState<'topic' | 'debate' | 'final'>('topic')
   const [topic, setTopic] = useState('')
   const [customTopic, setCustomTopic] = useState('')
+  const [userStance, setUserStance] = useState<'찬성' | '반대'>('찬성')
+  const [randomTopics, setRandomTopics] = useState<string[]>(() => getRandomTopics())
   const [turns, setTurns] = useState<Turn[]>([])
   const [history, setHistory] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -78,20 +99,22 @@ export default function DebateAgent() {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight
   }, [turns])
 
+  const aiStance = userStance === '찬성' ? '반대' : '찬성'
+  const finalTopic = customTopic.trim() || topic
+
   const addTurn = (turn: Turn) => setTurns(prev => [...prev, turn])
 
   const startDebate = async () => {
-    const t = customTopic.trim() || topic
-    if (!t) { alert('주제를 선택하거나 입력해주세요.'); return }
+    if (!finalTopic) { alert('주제를 선택하거나 입력해주세요.'); return }
     setTurns([])
     setHistory([])
     setScoreAccum({ s: [], l: [] })
     setPhase('debate')
     setLoading(true)
-    setStatus('AI가 반대 입장을 준비 중...')
+    setStatus('AI가 입장을 준비 중...')
 
-    const system = `당신은 토론 AI입니다. 주제: "${t}"에 대해 항상 반대 입장을 취합니다. 반대 입장의 핵심 논거를 2~3문장으로만 간결하게 말하세요. 절대 3문장을 넘지 마세요. 한국어로 답하세요. 중요: 마크다운 문법(**, *, #, ## 등)을 절대 사용하지 마세요. 일반 텍스트로만 작성하세요.`
-    const initMsg: Message[] = [{ role: 'user', content: '토론을 시작합니다. 반대 입장의 핵심 주장을 먼저 말씀해주세요.' }]
+    const system = `당신은 토론 AI입니다. 주제: "${finalTopic}"에 대해 항상 ${aiStance} 입장을 취합니다. 핵심 논거를 2~3문장으로만 간결하게 말하세요. 절대 3문장을 넘지 마세요. 한국어로만 답하세요. 마크다운 문법(**, *, #, ## 등)을 절대 사용하지 마세요. 일반 텍스트로만 작성하세요.`
+    const initMsg: Message[] = [{ role: 'user', content: '토론을 시작합니다. 첫 번째 주장을 말씀해주세요.' }]
     try {
       const reply = await callAPI(system, initMsg)
       addTurn({ role: 'ai', text: reply })
@@ -115,8 +138,8 @@ export default function DebateAgent() {
     setLoading(true)
     setStatus('AI가 반론과 피드백을 생성 중...')
 
-    const system = `당신은 토론 AI이자 토론 코치입니다. 주제: "${topic || customTopic}"에서 반대 입장입니다.
-중요: 마크다운 문법(**, *, #, ## 등)을 절대 사용하지 마세요. 모든 텍스트는 일반 텍스트로만 작성하세요.
+    const system = `당신은 토론 AI이자 토론 코치입니다. 주제: "${finalTopic}"에서 ${aiStance} 입장입니다.
+마크다운 문법(**, *, #, ## 등)을 절대 사용하지 마세요. 일반 텍스트로만 작성하세요.
 사용자의 발언에 대해 다음 형식으로 정확히 JSON을 반환하세요 (마크다운 없이 순수 JSON만):
 {
   "rebuttal": "반론 내용 (2~3문장, 날카롭고 논리적으로, 절대 3문장 초과 금지, 마크다운 절대 금지)",
@@ -154,7 +177,7 @@ export default function DebateAgent() {
     }
     setLoading(false)
     setStatus('')
-  }, [input, loading, history, topic, customTopic, ttsEnabled])
+  }, [input, loading, history, finalTopic, aiStance, ttsEnabled])
 
   const endDebate = async () => {
     const userTurns = turns.filter(t => t.role === 'user')
@@ -168,7 +191,7 @@ export default function DebateAgent() {
     const system = '당신은 토론 코치입니다. 마크다운을 사용하지 마세요.'
     const msgs: Message[] = [{
       role: 'user',
-      content: `주제 "${topic || customTopic}"에 대한 찬성 측 토론 ${userTurns.length}회를 마쳤습니다. 발언들: ${JSON.stringify(userTurns.map(t => t.text))}. 종합 피드백 2-3문장. 잘한 점 1가지, 개선할 점 1가지 포함.`,
+      content: `주제 "${finalTopic}"에 대한 ${userStance} 측 토론 ${userTurns.length}회를 마쳤습니다. 발언들: ${JSON.stringify(userTurns.map(t => t.text))}. 종합 피드백 2-3문장. 잘한 점 1가지, 개선할 점 1가지 포함.`,
     }]
     let summary = ''
     try {
@@ -182,7 +205,6 @@ export default function DebateAgent() {
     setStatus('')
   }
 
-  // 연속 녹음 + MediaRecorder로 오디오 저장
   const startMic = async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any
@@ -197,14 +219,12 @@ export default function DebateAgent() {
       return
     }
 
-    // MediaRecorder로 오디오 녹음
     audioChunksRef.current = []
     const mr = new MediaRecorder(stream)
     mediaRecorderRef.current = mr
     mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
     mr.start(100)
 
-    // SpeechRecognition으로 텍스트 변환
     const recog = new SR()
     recog.lang = 'ko-KR'
     recog.continuous = true
@@ -216,7 +236,7 @@ export default function DebateAgent() {
       const transcript = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join('')
       setInput(transcript)
     }
-    recog.onerror = () => { stopMic(stream); }
+    recog.onerror = () => { stopMic(stream) }
     recogRef.current = recog
     recog.start()
   }
@@ -226,7 +246,6 @@ export default function DebateAgent() {
     setIsRecording(false)
     setStatus('')
 
-    // MediaRecorder 중지 및 오디오 URL 생성
     const mr = mediaRecorderRef.current
     if (mr && mr.state !== 'inactive') {
       mr.onstop = () => {
@@ -237,7 +256,6 @@ export default function DebateAgent() {
           sendMessage(currentInput, url)
           setInput('')
         }
-        // 스트림 정리
         stream?.getTracks().forEach(t => t.stop())
         mediaRecorderRef.current?.stream?.getTracks().forEach(t => t.stop())
       }
@@ -248,14 +266,8 @@ export default function DebateAgent() {
   }
 
   const playAudio = (url: string, idx: number) => {
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current = null
-    }
-    if (playingIdx === idx) {
-      setPlayingIdx(null)
-      return
-    }
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+    if (playingIdx === idx) { setPlayingIdx(null); return }
     const audio = new Audio(url)
     audioRef.current = audio
     setPlayingIdx(idx)
@@ -269,8 +281,10 @@ export default function DebateAgent() {
     setHistory([])
     setTopic('')
     setCustomTopic('')
+    setUserStance('찬성')
     setFinalData(null)
     setScoreAccum({ s: [], l: [] })
+    setRandomTopics(getRandomTopics())
   }
 
   return (
@@ -283,26 +297,79 @@ export default function DebateAgent() {
 
         {/* Topic Phase */}
         {phase === 'topic' && (
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
-            <p className="text-xs text-gray-400 uppercase tracking-widest font-medium">토론 주제 선택</p>
-            <select
-              value={topic}
-              onChange={e => setTopic(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
-            >
-              <option value="">주제를 선택하세요...</option>
-              {PRESET_TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-            <input
-              type="text"
-              value={customTopic}
-              onChange={e => setCustomTopic(e.target.value)}
-              placeholder="직접 주제 입력..."
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            />
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+
+            {/* 주제 선택 */}
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <p className="text-xs text-gray-400 uppercase tracking-widest font-medium">주제 선택</p>
+                <button
+                  onClick={() => setRandomTopics(getRandomTopics())}
+                  className="text-xs text-blue-500 hover:text-blue-700 border border-blue-200 rounded-lg px-2 py-1 hover:bg-blue-50 transition-colors"
+                >
+                  🔀 다시 뽑기
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-2">
+                {randomTopics.map(t => (
+                  <button
+                    key={t}
+                    onClick={() => { setTopic(t); setCustomTopic('') }}
+                    className={`text-left px-3 py-2.5 rounded-xl border text-sm transition-colors ${
+                      topic === t && !customTopic
+                        ? 'bg-blue-50 border-blue-300 text-blue-800 font-medium'
+                        : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 직접 입력 */}
+            <div>
+              <p className="text-xs text-gray-400 uppercase tracking-widest font-medium mb-2">직접 입력</p>
+              <input
+                type="text"
+                value={customTopic}
+                onChange={e => { setCustomTopic(e.target.value); setTopic('') }}
+                placeholder="토론 주제를 직접 입력하세요..."
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+            </div>
+
+            {/* 내 입장 선택 */}
+            <div>
+              <p className="text-xs text-gray-400 uppercase tracking-widest font-medium mb-2">내 입장</p>
+              <div className="flex gap-3">
+                {(['찬성', '반대'] as const).map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setUserStance(s)}
+                    className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-medium transition-colors ${
+                      userStance === s
+                        ? s === '찬성'
+                          ? 'bg-blue-50 border-blue-400 text-blue-700'
+                          : 'bg-red-50 border-red-400 text-red-700'
+                        : 'border-gray-200 text-gray-400 hover:bg-gray-50'
+                    }`}
+                  >
+                    {s === '찬성' ? '👍 찬성' : '👎 반대'}
+                  </button>
+                ))}
+              </div>
+              {(topic || customTopic) && (
+                <p className="text-xs text-gray-400 mt-2 text-center">
+                  AI는 <span className={`font-medium ${userStance === '찬성' ? 'text-red-500' : 'text-blue-500'}`}>{userStance === '찬성' ? '반대' : '찬성'} 입장</span>으로 토론합니다
+                </p>
+              )}
+            </div>
+
             <button
               onClick={startDebate}
-              className="w-full py-3 rounded-xl bg-blue-50 border-2 border-blue-200 text-blue-700 font-medium text-sm hover:bg-blue-100 transition-colors"
+              disabled={!finalTopic}
+              className="w-full py-3 rounded-xl bg-blue-50 border-2 border-blue-200 text-blue-700 font-medium text-sm hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               토론 시작 →
             </button>
@@ -312,34 +379,34 @@ export default function DebateAgent() {
         {/* Debate Phase */}
         {phase === 'debate' && (
           <div className="space-y-3">
-            {/* Topic Banner */}
             <div className="bg-white rounded-2xl border border-gray-200 p-4">
               <p className="text-xs text-gray-400 uppercase tracking-widest mb-2">토론 주제</p>
-              <p className="font-medium text-gray-900 text-base leading-snug">{topic || customTopic}</p>
+              <p className="font-medium text-gray-900 text-base leading-snug">{finalTopic}</p>
               <div className="flex gap-2 mt-3">
-                <span className="flex-1 text-center py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-medium">나 — 찬성 입장</span>
-                <span className="flex-1 text-center py-1.5 rounded-lg bg-red-50 text-red-600 text-xs font-medium">AI — 반대 입장</span>
+                <span className={`flex-1 text-center py-1.5 rounded-lg text-xs font-medium ${userStance === '찬성' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-600'}`}>
+                  나 — {userStance} 입장
+                </span>
+                <span className={`flex-1 text-center py-1.5 rounded-lg text-xs font-medium ${aiStance === '반대' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-700'}`}>
+                  AI — {aiStance} 입장
+                </span>
                 <button
                   onClick={() => { if (ttsEnabled) window.speechSynthesis?.cancel(); setTtsEnabled(v => !v) }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${ttsEnabled ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-400 border-gray-200'}`}
                 >
-                  {ttsEnabled ? '🔊 음성 ON' : '🔇 음성 OFF'}
+                  {ttsEnabled ? '🔊 ON' : '🔇 OFF'}
                 </button>
               </div>
             </div>
 
-            {/* Chat */}
             <div ref={chatRef} className="bg-white rounded-2xl border border-gray-200 p-4 min-h-72 max-h-96 overflow-y-auto space-y-4">
               {turns.map((turn, i) => (
                 <div key={i} className={`flex flex-col gap-1 ${turn.role === 'user' ? 'items-end' : 'items-start'}`}>
                   <div className="flex items-center gap-2">
-                    <p className="text-xs text-gray-400">{turn.role === 'user' ? '나 (찬성)' : 'AI (반대)'}</p>
-                    {/* 내 발언 재생 버튼 */}
+                    <p className="text-xs text-gray-400">{turn.role === 'user' ? `나 (${userStance})` : `AI (${aiStance})`}</p>
                     {turn.role === 'user' && turn.audioBlob && (
                       <button
                         onClick={() => playAudio(turn.audioBlob!, i)}
                         className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${playingIdx === i ? 'bg-blue-100 text-blue-600 border-blue-300' : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'}`}
-                        title="내 발언 다시 듣기"
                       >
                         {playingIdx === i ? '⏸ 재생 중' : '▶ 다시 듣기'}
                       </button>
@@ -347,7 +414,7 @@ export default function DebateAgent() {
                   </div>
                   <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                     turn.role === 'user'
-                      ? 'bg-blue-500 text-white rounded-br-sm'
+                      ? userStance === '찬성' ? 'bg-blue-500 text-white rounded-br-sm' : 'bg-red-400 text-white rounded-br-sm'
                       : 'bg-gray-100 text-gray-800 rounded-bl-sm border border-gray-200'
                   }`}>
                     {turn.text}
@@ -372,34 +439,24 @@ export default function DebateAgent() {
                 </div>
               ))}
               {loading && (
-                <div className="flex items-start gap-2">
-                  <div className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm text-gray-500 animate-pulse">
-                    {status}
-                  </div>
+                <div className="flex items-start">
+                  <div className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm text-gray-500 animate-pulse">{status}</div>
                 </div>
               )}
             </div>
 
-            {/* Input */}
             <div className="bg-white rounded-2xl border border-gray-200 p-3 space-y-2">
               <div className="flex gap-2 items-end">
-                {/* 마이크 시작 / 발언 완료 버튼 */}
                 {!isRecording ? (
                   <button
                     onClick={startMic}
                     className="w-11 h-11 rounded-full border border-gray-200 flex items-center justify-center text-lg flex-shrink-0 hover:bg-gray-50 transition-all"
-                    title="음성 입력 시작"
-                  >
-                    🎤
-                  </button>
+                  >🎤</button>
                 ) : (
                   <button
                     onClick={() => stopMic()}
-                    className="h-11 px-3 rounded-xl bg-red-50 border border-red-300 text-red-600 text-xs font-medium flex-shrink-0 animate-pulse hover:bg-red-100 transition-all"
-                    title="발언 완료"
-                  >
-                    ⏹ 발언완료
-                  </button>
+                    className="h-11 px-3 rounded-xl bg-red-50 border border-red-300 text-red-600 text-xs font-medium flex-shrink-0 animate-pulse hover:bg-red-100"
+                  >⏹ 발언완료</button>
                 )}
                 <textarea
                   value={input}
@@ -413,13 +470,11 @@ export default function DebateAgent() {
                   onClick={() => sendMessage()}
                   disabled={loading || !input.trim() || isRecording}
                   className="h-11 px-4 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
-                >
-                  발언 →
-                </button>
+                >발언 →</button>
               </div>
               <div className="flex justify-between items-center px-1">
                 <p className="text-xs text-gray-400">
-                  {isRecording ? '🔴 녹음 중 — 다 말했으면 "발언완료" 버튼 클릭' : '🎤 마이크: 음성 입력 / 엔터: 텍스트 전송'}
+                  {isRecording ? '🔴 녹음 중 — 다 말했으면 "발언완료" 클릭' : '🎤 마이크: 음성 입력 / 엔터: 전송'}
                 </p>
                 <button onClick={endDebate} disabled={loading} className="text-xs text-gray-400 underline hover:text-red-400 disabled:opacity-40">
                   토론 종료 및 종합 피드백
@@ -434,13 +489,10 @@ export default function DebateAgent() {
           <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
             <div>
               <h2 className="text-lg font-medium text-gray-900">토론 종합 피드백</h2>
-              <p className="text-xs text-gray-400 mt-1">주제: {topic || customTopic}</p>
+              <p className="text-xs text-gray-400 mt-1">{finalTopic} · {userStance} 입장</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: '문장 구성', val: finalData.scores.s },
-                { label: '논리성', val: finalData.scores.l },
-              ].map(({ label, val }) => (
+              {[{ label: '문장 구성', val: finalData.scores.s }, { label: '논리성', val: finalData.scores.l }].map(({ label, val }) => (
                 <div key={label} className="bg-gray-50 rounded-xl p-3 text-center">
                   <p className="text-2xl font-medium text-blue-600">{val}</p>
                   <p className="text-xs text-gray-500 mt-1">{label}</p>
@@ -455,10 +507,7 @@ export default function DebateAgent() {
               </p>
             </div>
             <p className="text-sm text-gray-700 leading-relaxed">{finalData.summary}</p>
-            <button
-              onClick={reset}
-              className="w-full py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-            >
+            <button onClick={reset} className="w-full py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
               새 토론 시작
             </button>
           </div>
